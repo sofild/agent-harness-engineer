@@ -1,0 +1,77 @@
+{
+  "skill_name": "agent-harness-engineer-v2",
+  "version": "2.0.0",
+  "description": "Agent Harness Engineer v2 - 分阶段构建指南，帮助AI coding工具构建生产级Agent系统",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我想构建一个简单的AI编码助手Agent，能够读取文件、执行命令、搜索代码。请帮我设计Agent架构并给出实现代码。",
+      "expected_output": "按7个阶段构建Agent项目：1)项目初始化 2)LLM抽象层 3)工具系统 4)Agent核心循环 5)上下文管理 6)权限安全 7)生产化，每个阶段都有明确的理论指导、实践步骤、检查清单",
+      "files": ["README.md", "config/settings.yaml", "src/main.py", "src/agent/core.py", "src/tools/file_tools.py", "tests/test_agent.py"],
+      "phases": [1, 2, 3, 4, 5, 6, 7]
+    },
+    {
+      "id": 2,
+      "prompt": "我的Agent在处理长对话时经常遇到上下文超限的问题，导致API调用失败。请帮我优化上下文管理。",
+      "expected_output": "参考Phase 5:上下文管理，实现四级压缩管道（Snip→Microcompact→Context-Collapse→Autocompact），包含记忆系统，每个阶段都有检查清单",
+      "files": ["src/agent/context.py", "src/agent/memory.py"],
+      "phases": [5]
+    },
+    {
+      "id": 3,
+      "prompt": "我需要为Agent添加权限控制，防止执行危险操作（如rm -rf、sudo等）。请帮我设计权限模型。",
+      "expected_output": "参考Phase 6:权限安全，实现六层纵深防御，包含权限模型、Hook系统、沙箱管理，每个阶段都有检查清单",
+      "files": ["src/permissions/models.py", "src/permissions/hooks.py", "src/permissions/sandbox.py", "config/hooks/pre-tool-use.py"],
+      "phases": [6]
+    },
+    {
+      "id": 4,
+      "prompt": "我的Agent已经运行了一段时间，但感觉响应质量下降了。请帮我诊断问题并给出优化建议。",
+      "expected_output": "参考Phase 7:生产化，提供Agent诊断框架，包含功能诊断、性能诊断、安全诊断的具体方法和代码，每个阶段都有检查清单",
+      "files": ["src/utils/diagnostics.py", "docs/optimization.md"],
+      "phases": [7]
+    },
+    {
+      "id": 5,
+      "prompt": "我想将现有的单Agent升级为多Agent协作系统，能够并行处理复杂任务。请帮我设计Coordinator模式。",
+      "expected_output": "参考references/09-multi-agent.md，提供Coordinator模式的设计和实现，包含任务拆解、子Agent隔离、结果综合的代码",
+      "files": ["src/agent/coordinator.py", "src/agent/sub_agent.py", "docs/multi-agent.md"],
+      "phases": [4, 9]
+    },
+    {
+      "id": 6,
+      "prompt": "请帮我创建一个完整的Agent项目脚手架，包含文件操作、网络请求、浏览器工具，可以直接运行。",
+      "expected_output": "按7个阶段构建完整Agent项目：1)项目初始化 2)LLM抽象层 3)工具系统 4)Agent核心循环 5)上下文管理 6)权限安全 7)生产化，包含完整的工具集、权限配置、错误处理、README文档、测试用例，项目结构完整",
+      "files": ["README.md", ".env.example", "config/settings.yaml", "src/main.py", "src/agent/core.py", "src/tools/file_tools.py", "src/tools/network_tools.py", "src/permissions/models.py", "tests/test_agent.py", "tests/test_tools.py"],
+      "phases": [1, 2, 3, 4, 5, 6, 7]
+    },
+    {
+      "id": 7,
+      "prompt": "我想用Node.js构建一个Agent，支持多LLM供应商，包含完整的项目结构。",
+      "expected_output": "按7个阶段构建Node.js版本的Agent项目：1)项目初始化 2)LLM抽象层 3)工具系统 4)Agent核心循环 5)上下文管理 6)权限安全 7)生产化，包含package.json、src目录、多供应商支持、README文档，项目结构完整",
+      "files": ["README.md", "package.json", ".env.example", "config/settings.yaml", "src/main.js", "src/agent/core.js", "src/llm/client.js", "src/llm/factory.js", "src/tools/registry.js"],
+      "phases": [1, 2, 3, 4, 5, 6, 7]
+    },
+    {
+      "id": 8,
+      "prompt": "帮我构建一个Agent，要求使用OpenAI的GPT模型而不是Claude。",
+      "expected_output": "参考Phase 2:LLM抽象层，实现支持OpenAI的Agent项目，配置文件中使用openai作为provider，代码中不硬编码Anthropic依赖，支持通过配置切换供应商",
+      "files": ["config/settings.yaml", "src/llm/providers/openai.py", "src/llm/factory.py"],
+      "phases": [2]
+    },
+    {
+      "id": 9,
+      "prompt": "帮我构建一个Agent，要有清晰的目录结构，区分核心代码和用户配置。",
+      "expected_output": "参考Phase 1:项目初始化，实现目录结构清晰的Agent项目，包含src/（核心代码）、config/（用户配置）、skills/（用户扩展）、memory/（运行时数据）、workspace/（用户工作区），README说明各目录用途，每个阶段都有检查清单",
+      "files": ["README.md", "config/settings.yaml", "config/agents/default.md", "skills/example-skill.md", "src/main.py", "src/agent/core.py"],
+      "phases": [1]
+    },
+    {
+      "id": 10,
+      "prompt": "帮我构建一个Agent，要能引导我一步步添加自定义skill。",
+      "expected_output": "参考Phase 1:项目初始化，实现支持自定义skill的Agent项目，包含skill模板、skill注册机制、引导用户添加skill的文档，项目结构完整，每个阶段都有检查清单",
+      "files": ["README.md", "skills/example-skill.md", "src/agent/core.py", "docs/adding-skills.md"],
+      "phases": [1, 3]
+    }
+  ]
+}
