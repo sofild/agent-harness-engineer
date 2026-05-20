@@ -1,5 +1,5 @@
 ---
-name: agent-harness-engineer-v2
+name: agent-harness-engineer
 description: >
   指导AI coding工具构建生产级Agent系统。当用户需要设计、实现或优化AI Agent系统时触发。
   特别适用于：Agent架构设计、Harness工程、工具系统、权限模型、上下文管理、多智能体协作、
@@ -11,39 +11,91 @@ description: >
   核心目标：帮助AI coding工具生成结构完整、可扩展、生产就绪的Agent项目，
   而非仅提供最小化demo代码。
   
-  与v1版本的区别：
+  与v1/v2版本的区别：
   - v1版本：提供理论文档和最小示例，AI coding工具需要自己理解如何应用
   - v2版本：提供分阶段构建指南，每个阶段都有明确的理论指导、实践步骤、检查清单和常见问题
-  - v2版本：AI coding工具按阶段执行，每个阶段都有明确的输入、输出和验收标准
+  - v3版本（当前）：引入三级构建规模、代码生成禁止复制策略、技术栈分级推荐、抽象接口引导模式。
+    AI coding工具必须根据用户需求生成定制化代码，不得直接复制reference中的示例代码。
+    reference中的代码已全部改为"抽象接口/骨架 + AI引导提示"，确保AI主动设计而非被动复制。
 ---
 
-# Agent Harness Engineer v2
+# Agent Harness Engineer v3
 
-本 Skill 将帮助你设计、实现和优化生产级的 AI Agent 系统，当前是v2版本。
+本 Skill 将帮助你设计、实现和优化生产级的 AI Agent 系统，当前是 v3 版本。
 
 本版本采用**分阶段构建模式**，将 Agent 系统构建拆分为 7 个明确的阶段，每个阶段都有：
 - **理论指导**：该阶段需要应用什么设计原则
-- **实践步骤**：具体要创建/修改哪些文件
-- **检查清单**：完成标准是什么
+- **抽象接口层**：定义而非实现，引导 AI 根据需求生成代码（v3 核心变更）
+- **AI 构建提示**：在关键位置给出引导，告诉 AI 应该生成什么
+- **检查清单**：完成标准是什么（按规模分级）
 - **常见问题**：这个阶段容易踩什么坑
+
+## v3 核心变更（必读）
+
+### 变更1：三级构建规模
+
+Agent 系统不再只有一种构建方式。根据用户需求，分为三级：
+
+```
+┌───────────────────┬───────────────────────┬──────────────────────────┬──────────────────────────┐
+│  维度             │  Minimal（最小）       │  Professional（专业）     │  Enterprise（企业）       │
+├───────────────────┼───────────────────────┼──────────────────────────┼──────────────────────────┤
+│  目标             │  快速原型/学习验证     │  团队工具/生产级应用      │  企业平台/高并发/多租户   │
+│  预期代码量       │  ~300-500行           │  ~2000-4000行            │  ~6000-10000行+          │
+│  第三方库         │  仅SDK（1-2个）       │  5-8个关键库             │  10+个全套生态栈         │
+│  沙箱             │  路径白名单检查        │  Docker容器隔离           │  Firecracker微VM隔离      │
+│  日志             │  print() / console.log│ structlog / loguru / pino│  OpenTelemetry 全链路     │
+│  CLI              │  input() / 简单argparse│ click / typer / commander│  rich + 交互式TUI         │
+│  配置管理         │  .env 文件            │  YAML + pydantic/zod     │  7级层级化配置覆盖        │
+│  测试             │  手动测试或无          │  pytest/jest + mock      │  pytest/jest + CI/CD      │
+│  监控             │  无                   │  基础 metrics 计数器     │  Prometheus + Grafana     │
+│  上下文压缩       │  仅 Snip（历史截断）   │  完整四级压缩管道         │  四级 + 压缩状态恢复      │
+│  记忆系统         │  无                   │  文件系统持久化           │  向量数据库 + 自动做梦    │
+│  MCP集成          │  无                   │  基础 stdio MCP          │  全协议 + 连接池管理      │
+│  多Agent          │  不支持               │  可选（Coordinator）     │  支持（Coordinator+Swarm）│
+└───────────────────┴───────────────────────┴──────────────────────────┴──────────────────────────┘
+```
+
+### 变更2：代码生成禁止复制策略
+
+> **关键规则：AI coding工具必须根据用户需求设计并生成代码，不得直接复制 reference 文件或 template 文件中的代码片段。**
+> 
+> Reference 文件中的代码已从"完整实现"改为"抽象接口/类定义 + AI构建提示"。
+> Template 文件中的代码已从"完整实现"改为"骨架 + TODO + AI构建提示"。
+>
+> **为什么？** 之前的 reference 和 template 中包含完整可运行代码（如 read_file 实现、sandbox 实现），AI工具会直接复制，导致生成的系统永远是"最小实现"，无法根据用户需求调整复杂度和技术栈。
+
+**AI coding工具的正确行为：**
+1. 阅读 reference 中的抽象接口定义，理解需要哪些方法和属性
+2. 阅读 reference 中的设计原理，理解为什么这样设计
+3. 根据用户选择的规模和用途，决定生成代码的复杂度和完整度
+4. 参考 technology-stack.md 选择合适的三方库
+5. **自己设计并编写代码**，而非复制粘贴
+
+### 变更3：技术栈分级推荐
+
+参考 `references/11-technology-stack.md`，每个维度（日志、CLI、HTTP、沙箱、监控等）都提供 Minimal / Professional / Enterprise 三级推荐方案。AI 必须根据用户选择的规模，选择对应级别的技术栈。
 
 ## 快速导航
 
-本 Skill 采用**分阶段构建模式**，核心内容分布在多个文件中：
-
-- **[SKILL.md](SKILL.md)** (本文件): 核心原则、分阶段构建指南总览
-- **[references/01-phase-init.md](references/01-phase-init.md)**: **Phase 1: 项目初始化** - 目录结构、配置文件、README
-- **[references/02-phase-llm.md](references/02-phase-llm.md)**: **Phase 2: LLM抽象层** - 多供应商客户端、工厂函数
-- **[references/03-phase-tools.md](references/03-phase-tools.md)**: **Phase 3: 工具系统** - 工具注册表、核心工具实现
-- **[references/04-phase-agent-loop.md](references/04-phase-agent-loop.md)**: **Phase 4: Agent核心循环** - 状态机、错误恢复、终止原因
-- **[references/05-phase-context.md](references/05-phase-context.md)**: **Phase 5: 上下文管理** - 四级压缩管道、记忆系统
-- **[references/06-phase-permissions.md](references/06-phase-permissions.md)**: **Phase 6: 权限安全** - 权限模型、Hook系统、沙箱
-- **[references/07-phase-production.md](references/07-phase-production.md)**: **Phase 7: 生产化** - 测试、监控、日志
-- **[references/08-core-concepts.md](references/08-core-concepts.md)**: 核心概念速查（Harness Engineering三大支柱、三组件虚拟化架构）
-- **[references/09-multi-agent.md](references/09-multi-agent.md)**: 多智能体协作、Coordinator模式、Swarm系统
-- **[references/10-mcp-integration.md](references/10-mcp-integration.md)**: MCP协议、六种传输协议、配置示例
-- **[templates/project-scaffold/](../templates/project-scaffold/)**: 完整项目脚手架模板（Python/Node.js）
-- **[templates/README.md](../templates/README.md)**: 项目README模板
+- **[SKILL.md](SKILL.md)** (本文件): 核心原则、构建规模分级、代码生成策略
+- **[references/01-phase-init.md](references/01-phase-init.md)**: Phase 1: 项目初始化（三级规模目录结构）
+- **[references/02-phase-llm.md](references/02-phase-llm.md)**: Phase 2: LLM抽象层（含streaming、retry、token计数接口）
+- **[references/03-phase-tools.md](references/03-phase-tools.md)**: Phase 3: 工具系统（含concurrency分区算法、MCP adapter）
+- **[references/04-phase-agent-loop.md](references/04-phase-agent-loop.md)**: Phase 4: Agent核心循环（含状态机、7个continue站点、流式架构）
+- **[references/05-phase-context.md](references/05-phase-context.md)**: Phase 5: 上下文管理（含四级压缩完整算法、Session WAL设计）
+- **[references/06-phase-permissions.md](references/06-phase-permissions.md)**: Phase 6: 权限安全（含5种模式、7级规则、6层防御、沙箱技术对比）
+- **[references/07-phase-production.md](references/07-phase-production.md)**: Phase 7: 生产化（含OpenTelemetry、三层可观测、CI/CD）
+- **[references/08-core-concepts.md](references/08-core-concepts.md)**: 核心概念速查（三大支柱、三组件虚拟化、13条防护规则）
+- **[references/09-multi-agent.md](references/09-multi-agent.md)**: 多智能体（子Agent隔离设计、Token节省量化、Worktree隔离）
+- **[references/10-mcp-integration.md](references/10-mcp-integration.md)**: MCP集成（6种传输协议、连接池、OAuth、资源管理）
+- **[references/11-technology-stack.md](references/11-technology-stack.md)**: 技术栈分级选择指南（日志/CLI/HTTP/沙箱/监控/测试/数据库）
+- **[references/12-sandbox-advanced.md](references/12-sandbox-advanced.md)**: 沙箱深度设计（Docker/Firecracker/gVisor/Wasm对比、bubblewrap集成）
+- **[references/13-session-design.md](references/13-session-design.md)**: 会话设计（WAL模式、事件类型、状态机、回放恢复机制）
+- **[references/14-observability.md](references/14-observability.md)**: 可观测性（OpenTelemetry/Prometheus/Langfuse集成、结构化日志）
+- **[templates/minimal/](../templates/minimal/)**: Minimal 规模脚手架模板
+- **[templates/professional/](../templates/professional/)**: Professional 规模脚手架模板
+- **[templates/enterprise/](../templates/enterprise/)**: Enterprise 规模脚手架模板
 
 ## 核心原则
 
@@ -58,7 +110,7 @@ description: >
 - **Architectural Constraints（架构约束）**: 通过机械执行而非建议来建立边界
   - 权限模型：5种模式 × 7级规则层级
   - 工具约束：Schema验证、并发安全标记
-  - 安全边界：沙盒隔离、硬编码拒绝、纵深防御
+  - 安全边界：沙盒隔离、硬编码拒绝、纵深防御（6层）
 
 - **Entropy Management（熵管理）**: 定期清理Agent解决代码退化
   - 文档一致性验证、约束违规扫描、模式强制执行
@@ -97,9 +149,11 @@ Sandbox（沙箱）= 隔离执行环境
 |------|---------|------|
 | **技术栈偏好？** | Python / Node.js / TypeScript / Go | 决定项目脚手架语言 |
 | **LLM供应商？** | Anthropic / OpenAI / Azure / 本地模型 | 决定默认配置 |
-| **Agent规模？** | 小型（个人助手）/ 中型（团队工具）/ 大型（企业平台） | 决定项目复杂度 |
+| **构建规模？** | Minimal / Professional / Enterprise | 决定项目复杂度、代码量、三方库数量 |
 | **主要用途？** | 编码助手 / 自动化运维 / 数据分析 / 通用对话 / 其他 | 决定工具集 |
 | **部署环境？** | 本地 / 云服务器 / 容器 / Serverless | 决定配置方式 |
+| **沙箱隔离需求？** | 无 / 基础路径检查 / Docker隔离 / Firecracker微VM | 决定安全方案 |
+| **监控需求？** | 无 / 基础日志 / 全链路追踪(Prometheus+OpenTelemetry) | 决定可观测方案 |
 | **是否需要多Agent协作？** | 是 / 否 | 决定是否需要Phase 9内容 |
 
 ### 询问示例
@@ -109,31 +163,36 @@ Sandbox（沙箱）= 隔离执行环境
 ```
 在开始构建Agent之前，我需要确认几个问题：
 
-1. **技术栈偏好**：你希望使用什么语言/框架？
+1. **技术栈偏好**：
    - Python（推荐，功能完善）
-   - Node.js/TypeScript（如果你熟悉JS生态）
+   - Node.js/TypeScript
 
-2. **LLM供应商**：你打算使用哪个LLM提供商？
+2. **LLM供应商**：
    - Anthropic (Claude) - 复杂推理、长上下文
    - OpenAI (GPT) - 通用任务、生态丰富
-   - Azure OpenAI - 企业合规、私有部署
-   - 本地模型 (Ollama/vLLM) - 隐私敏感、离线环境
+   - Azure OpenAI - 企业合规
+   - 本地模型 (Ollama/vLLM) - 隐私敏感
 
-3. **Agent规模**：你的Agent主要用于什么场景？
-   - 小型：个人助手，简单任务
-   - 中型：团队协作，多功能
-   - 大型：企业平台，高并发
+3. **构建规模**（重要！决定生成代码的复杂度和技术栈）：
+   - Minimal：快速原型，~300行代码，几乎无三方库依赖
+   - Professional：生产级应用，~3000行代码，包含Docker沙箱、日志系统、测试
+   - Enterprise：企业平台，~8000行代码，全链路监控、微VM沙箱、多Agent
 
-4. **主要用途**：你的Agent主要做什么？
-   - 编码助手
-   - 自动化运维
-   - 数据分析
-   - 通用对话
-   - 其他（请说明）
+4. **主要用途**：编码助手 / 自动化运维 / 数据分析 / 通用对话 / 其他
 
-5. **是否需要多Agent协作**？
-   - 是（需要并行处理复杂任务）
-   - 否（单Agent足够）
+5. **沙箱隔离需求**：
+   - 不需要（Agent在本地直接执行）
+   - 基础路径检查（沙箱限制工作目录）
+   - Docker容器隔离（推荐Professional场景）
+   - Firecracker微VM（推荐Enterprise高安全场景）
+
+6. **监控需求**：
+   - 不需要
+   - 基础结构化日志（推荐Professional场景）
+   - 全链路追踪（推荐Enterprise场景）
+
+7. **是否需要多Agent协作**？
+   - 是 / 否
 
 请告诉我你的选择，我会根据你的需求构建最合适的Agent项目。
 ```
@@ -146,12 +205,18 @@ Sandbox（沙箱）= 隔离执行环境
 根据你的需求（Python技术栈 + Anthropic模型 + 编码助手），
 我还需要确认：
 
-1. Agent规模？
-   - 小型：个人助手
-   - 中型：团队工具
-   - 大型：企业平台
+1. 构建规模？
+   - Minimal：快速原型（300行）
+   - Professional：生产级（3000行）
+   - Enterprise：企业平台（8000行）
 
-2. 是否需要多Agent协作？
+2. 沙箱隔离需求？
+   - 无 / 基础路径检查 / Docker隔离 / Firecracker微VM
+
+3. 监控需求？
+   - 无 / 基础日志 / 全链路追踪
+
+4. 是否需要多Agent协作？
    - 是 / 否
 
 请补充提供以上信息，我将开始构建。
@@ -165,200 +230,102 @@ Sandbox（沙箱）= 隔离执行环境
 你未明确说明偏好，我将使用以下默认值：
 - 技术栈：Python（功能完善，社区活跃）
 - LLM供应商：Anthropic（长上下文优势）
-- Agent规模：中型（平衡功能与复杂度）
+- 构建规模：Professional（平衡功能与复杂度，适合团队工具阶段）
 - 主要用途：通用对话
+- 沙箱：Docker隔离
+- 监控：基础结构化日志
 - 多Agent协作：否
 
 如果你有其他偏好，请在回复中说明，我会相应调整。
 ```
 
----
+### 构建规模决策矩阵
 
-## 分阶段构建指南（v2核心改进）
+AI可以辅助用户选择规模：
 
-> **重要：当用户说"帮我构建一个Agent"时，必须按以下7个阶段逐步执行。**
-> **每个阶段完成后，必须检查检查清单，确认通过后再进入下一阶段。**
-
-### Phase 1: 项目初始化（参考 references/01-phase-init.md）
-
-**目标**：建立项目骨架，定义目录结构和配置文件
-
-**理论指导**：
-- 应用 **Context Engineering** 原则：目录结构即信息的可访问性
-- 应用 **Architectural Constraints** 原则：通过目录结构建立边界
-
-**实践步骤**：
-1. 创建标准目录结构（src/、config/、skills/、memory/、workspace/、tests/）
-2. 创建主配置文件 config/settings.yaml
-3. 创建环境变量模板 .env.example
-4. 创建项目 README.md
-
-**检查清单**：
-- [ ] 目录结构符合规范
-- [ ] 配置文件包含LLM、Agent、工具、权限、记忆配置
-- [ ] README包含安装、配置、启动说明
-- [ ] .env.example包含所有必要的环境变量
-
-**常见问题**：
-- 问题：目录结构不清晰，核心代码和用户配置混在一起
-- 解决：严格区分 src/（核心框架）和 config/（用户配置）
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 帮你选择构建规模：                                            │
+│                                                              │
+│ ● 如果你是开发者，想快速验证Agent概念 → Minimal               │
+│ ● 如果你是团队，需要可维护的生产级Agent → Professional        │
+│ ● 如果你是平台方，需要服务多用户 → Enterprise                 │
+│                                                              │
+│ 如果你不确定，建议从 Professional 开始。                      │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Phase 2: LLM抽象层（参考 references/02-phase-llm.md）
+## 分阶段构建指南
 
-**目标**：实现与供应商无关的LLM客户端抽象
+> **核心规则（v3 强制）**：
+> 1. 以下每个 Phase 的摘要仅提供目标概述。**实际构建时必须打开对应的 reference 文件**，其中包含设计原理、抽象接口定义、AI构建提示。
+> 2. **禁止直接复制 reference 或 template 中的代码片段。** AI 必须根据用户选择的规模生成定制化代码。
+> 3. 每个阶段完成后，必须使用**与该规模对应的检查清单**进行验收。
 
-**理论指导**：
-- 应用 **供应商无关性** 原则：代码不绑定特定LLM供应商
-- 应用 **工厂模式**：通过配置切换供应商
+### Phase 1: 项目初始化 → `references/01-phase-init.md`
 
-**实践步骤**：
-1. 创建抽象LLM客户端接口 src/llm/client.py
-2. 实现Anthropic客户端 src/llm/providers/anthropic.py
-3. 实现OpenAI客户端 src/llm/providers/openai.py
-4. 实现本地模型客户端 src/llm/providers/local.py
-5. 创建工厂函数 src/llm/factory.py
+**目标**：建立项目骨架，定义目录结构（三级规模不同结构）和配置文件。
 
-**检查清单**：
-- [ ] 抽象接口定义完整（chat、validate_config）
-- [ ] 至少实现3个供应商（Anthropic、OpenAI、Local）
-- [ ] 工厂函数支持通过配置切换供应商
-- [ ] 代码中没有硬编码的供应商依赖
+**规模差异**：
+- Minimal: 单文件或最小目录结构
+- Professional: 标准 src/config/tests 分离
+- Enterprise: 多包 monorepo 结构
 
-**常见问题**：
-- 问题：默认使用Anthropic，用户想切换供应商需要改很多代码
-- 解决：所有供应商相关配置都通过配置文件管理
+### Phase 2: LLM抽象层 → `references/02-phase-llm.md`
 
----
+**目标**：实现与供应商无关的LLM客户端抽象。
 
-### Phase 3: 工具系统（参考 references/03-phase-tools.md）
+**规模差异**：
+- Minimal: 单一供应商直连
+- Professional: 工厂模式 + streaming + retry
+- Enterprise: 多供应商 + prompt cache管理 + token计数 + lazy import
 
-**目标**：实现模块化的工具注册和执行机制
+### Phase 3: 工具系统 → `references/03-phase-tools.md`
 
-**理论指导**：
-- 应用 **工具分区算法**：只读工具可并发，写入工具需串行
-- 应用 **Schema验证**：工具输入必须符合预定义Schema
+**目标**：实现模块化的工具注册和执行机制。
 
-**实践步骤**：
-1. 创建工具注册表 src/tools/registry.py
-2. 实现文件操作工具 src/tools/file_tools.py
-3. 实现网络请求工具 src/tools/network_tools.py
-4. 实现浏览器工具 src/tools/browser_tools.py（可选）
+**规模差异**：
+- Minimal: 函数字典注册
+- Professional: Registry + Schema验证 + MCP adapter
+- Enterprise: 并发分区算法 + 工具依赖图 + 工具结果truncation
 
-**检查清单**：
-- [ ] 工具注册表支持动态注册和查询
-- [ ] 每个工具都有完整的Schema定义
-- [ ] 工具执行有错误处理
-- [ ] 支持并发安全标记
+### Phase 4: Agent核心循环 → `references/04-phase-agent-loop.md`
 
-**常见问题**：
-- 问题：工具描述不清晰，LLM调用时参数错误
-- 解决：工具描述要详细，包含参数说明和注意事项
+**目标**：实现健壮的Agent主循环，包含错误恢复和状态管理。
 
----
+**规模差异**：
+- Minimal: 简单 while 循环
+- Professional: while(true) + 7个Continue站点 + 状态机
+- Enterprise: AsyncGenerator流式 + 双层超时 + Session回放
 
-### Phase 4: Agent核心循环（参考 references/04-phase-agent-loop.md）
+### Phase 5: 上下文管理 → `references/05-phase-context.md`
 
-**目标**：实现健壮的Agent主循环，包含错误恢复和状态管理
+**目标**：实现四级压缩管道和记忆系统。
 
-**理论指导**：
-- 应用 **7个Continue站点**：从几乎任何错误中恢复
-- 应用 **状态机设计**：单一State对象，伪不可变语义
+**规模差异**：
+- Minimal: 仅 Snip 历史截断
+- Professional: 完整四级管道 + 文件记忆
+- Enterprise: 四级 + 压缩状态恢复 + 向量数据库记忆
 
-**实践步骤**：
-1. 创建Agent核心类 src/agent/core.py
-2. 实现主循环（while true + 7个continue站点）
-3. 实现状态管理 src/agent/session.py
-4. 实现错误恢复机制
+### Phase 6: 权限安全 → `references/06-phase-permissions.md`
 
-**检查清单**：
-- [ ] 主循环包含7个continue站点
-- [ ] 状态管理使用单一State对象
-- [ ] 错误恢复机制覆盖常见错误
-- [ ] 支持最大轮次限制
+**目标**：实现权限控制和沙箱机制。
 
-**常见问题**：
-- 问题：遇到API错误时直接崩溃，没有重试
-- 解决：实现渐进式降级，每种错误先尝试最轻量的恢复
+**规模差异**：
+- Minimal: 命令黑名单
+- Professional: 权限模型 + Hook系统 + Docker沙箱
+- Enterprise: 6层纵深防御 + Firecracker + 审计日志
 
----
+### Phase 7: 生产化 → `references/07-phase-production.md`
 
-### Phase 5: 上下文管理（参考 references/05-phase-context.md）
+**目标**：添加测试、监控、日志。
 
-**目标**：实现四级压缩管道和记忆系统
-
-**理论指导**：
-- 应用 **四级压缩管道**：Snip → Microcompact → Context-Collapse → Autocompact
-- 应用 **记忆四分类**：User、Feedback、Project、Reference
-
-**实践步骤**：
-1. 实现上下文管理器 src/agent/context.py
-2. 实现四级压缩管道
-3. 实现记忆系统 src/agent/memory.py
-4. 实现自动做梦机制
-
-**检查清单**：
-- [ ] 四级压缩管道完整实现
-- [ ] 压缩后恢复关键状态
-- [ ] 记忆系统支持短期和长期记忆
-- [ ] 自动做梦机制触发条件正确
-
-**常见问题**：
-- 问题：压缩后丢失关键上下文
-- 解决：压缩后必须主动恢复文件内容、Skill上下文、Plan、任务列表
-
----
-
-### Phase 6: 权限安全（参考 references/06-phase-permissions.md）
-
-**目标**：实现完整的权限控制和沙箱机制
-
-**理论指导**：
-- 应用 **六层纵深防御**：权限模型、Hook系统、沙箱、审计
-- 应用 ** deny > settings rules > hook allow**：安全不可变量
-
-**实践步骤**：
-1. 实现权限模型 src/permissions/models.py
-2. 实现Hook系统 src/permissions/hooks.py
-3. 实现沙箱管理 src/permissions/sandbox.py
-4. 配置权限规则 config/settings.yaml
-
-**检查清单**：
-- [ ] 权限模型支持allow/deny/ask三种模式
-- [ ] Hook系统支持pre/post-tool-use
-- [ ] 沙箱限制文件系统访问范围
-- [ ] 危险命令被正确拦截
-
-**常见问题**：
-- 问题：Hook allow绕过deny规则
-- 解决：deny > settings rules > hook allow，这是安全不可变量
-
----
-
-### Phase 7: 生产化（参考 references/07-phase-production.md）
-
-**目标**：添加测试、监控、日志，使项目达到生产级标准
-
-**理论指导**：
-- 应用 **三级Harness成熟度**：个人 → 团队 → 组织级
-- 应用 **三层测试金字塔**：单元测试、集成测试、端到端测试
-
-**实践步骤**：
-1. 编写单元测试 tests/test_*.py
-2. 添加监控和日志 src/utils/logging.py
-3. 添加性能监控
-4. 编写部署文档
-
-**检查清单**：
-- [ ] 核心模块都有单元测试
-- [ ] 日志系统支持多级别
-- [ ] 性能监控记录关键指标
-- [ ] 部署文档完整
-
-**常见问题**：
-- 问题：测试覆盖率低，关键路径未测试
-- 解决：优先测试Agent核心循环和工具执行
+**规模差异**：
+- Minimal: 无
+- Professional: pytest + structlog + 基础metrics
+- Enterprise: CI/CD + OpenTelemetry + Prometheus
 
 ## 十大设计哲学
 
@@ -386,9 +353,8 @@ Sandbox（沙箱）= 隔离执行环境
 
 ## 参考资源
 
-- **核心文档**: 本目录下的 `references/` 文件
-- **项目模板**: `templates/project-scaffold/` 目录下的完整项目模板
-- **README模板**: `templates/README.md`
+- **核心文档**: 本目录下的 `references/` 文件（共14个）
+- **项目模板**: `templates/minimal/` `templates/professional/` `templates/enterprise/`
 - **外部资源**:
   - Anthropic Managed Agents API文档
   - Claude Code源码（~512,664行TypeScript）
