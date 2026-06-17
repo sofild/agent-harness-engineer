@@ -338,3 +338,140 @@ Hook之间独立运行，一个Hook抛出异常不影响其他Hook执行。Hook�
 ## 下一步
 
 完成Phase 6后，进入 **Phase 7: 生产化**（参考 `references/07-phase-production.md`）。
+
+---
+
+# 安全护栏子循环 (v4)
+
+> 配合 Phase 4 的 Loop Engineering 升级，在每个 Agent 行动前后嵌入轻量安全检查循环，形成"行动前审核 → 行动后审计"的双层防线。
+
+## 设计原理
+
+安全护栏子循环在主 Agent 循环的每个行动（工具调用）前后各插入一个检查点：
+- **Pre-Action Check**：行动前验证权限、预算、合规、速率限制
+- **Post-Action Audit**：行动后扫描敏感信息泄露、PII、输出合规
+
+## 抽象接口
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Any
+
+
+class SafetyVerdict(Enum):
+    """安全判定结果"""
+    ALLOW = "allow"                    # 放行
+    BLOCK = "block"                    # 阻断 + 告警
+    REQUIRE_REPLAN = "require_replan"  # 要求 Agent 重新规划
+    REDACT = "redact"                  # 自动脱敏后继续
+
+
+@dataclass
+class SafetyRule:
+    """安全规则定义"""
+    name: str
+    description: str
+    severity: str  # critical | high | medium
+    check_fn: Callable
+
+
+class SafetyGuardLoop:
+    """
+    安全护栏子循环：
+    - 行动前：权限、预算、合规、速率限制检查
+    - 行动后：敏感信息扫描、PII 检测、输出审核
+    """
+
+    def __init__(self):
+        self.pre_rules: List[SafetyRule] = []   # 行动前规则列表
+        self.post_rules: List[SafetyRule] = []  # 行动后规则列表
+        self.safety_log: List[Dict] = []        # 安全事件日志
+
+    async def pre_action_check(self, action: Dict, agent_state: Dict) -> SafetyVerdict:
+        """行动前安全检查循环：遍历所有 pre_rules，任一 BLOCK 则阻断"""
+        for rule in self.pre_rules:
+            verdict = await rule.check_fn(action, agent_state)
+            if verdict == SafetyVerdict.BLOCK:
+                return SafetyVerdict.BLOCK
+            if verdict == SafetyVerdict.REQUIRE_REPLAN:
+                return SafetyVerdict.REQUIRE_REPLAN
+        return SafetyVerdict.ALLOW
+
+    async def post_action_audit(self, action: Dict, output: str) -> SafetyVerdict:
+        """行动后审计循环：遍历所有 post_rules，REDACT 自动脱敏"""
+        for rule in self.post_rules:
+            verdict = await rule.check_fn(output)
+            if verdict == SafetyVerdict.BLOCK:
+                return SafetyVerdict.BLOCK
+            if verdict == SafetyVerdict.REDACT:
+                output = await self._redact(output, rule.name)
+        return SafetyVerdict.ALLOW
+```
+
+## 预置规则集
+
+### Pre-Action 规则（行动前）
+
+| 规则 | 严重级别 | 说明 |
+|------|---------|------|
+| `block_destructive` | critical | 阻断对关键路径的破坏性操作（`/etc/`, `C:\Windows\`, `.git/`, `production/`） |
+| `budget_limit` | high | 检查行动是否超出预算上限 |
+| `permission_check` | critical | 验证 Agent 对该操作的权限 |
+| `rate_limit` | high | 检查 API 调用频率限制 |
+
+### Post-Action 规则（行动后）
+
+| 规则 | 严重级别 | 说明 |
+|------|---------|------|
+| `no_secrets` | critical | 扫描输出中的 API Key / Token / 密码 |
+| `pii_detection` | critical | 检测个人身份信息（SSN / 信用卡号 / 邮箱） |
+| `output_size` | medium | 验证输出大小在限制内 |
+| `compliance` | high | 对照合规策略检查输出内容 |
+
+## 与现有 6 层纵深防御的关系
+
+安全护栏子循环作为现有 6 层防御的 **Layer 2.5**——介于权限检查（Layer 2）和沙箱隔离（Layer 3）之间：
+
+```
+Layer 1: 输入验证
+Layer 2: 权限模型（5 种模式 × 7 级规则）
+Layer 2.5: 安全护栏子循环 ← v4 新增
+Layer 3: 沙箱隔离（Docker / Firecracker）
+Layer 4: 网络策略
+Layer 5: 审计日志
+Layer 6: 告警与响应
+```
+
+**与 Layer 2 的差异**：Layer 2 是静态规则链（"这个操作能否执行"），Layer 2.5 是动态上下文感知（"在当前状态下，这个操作是否安全"）。
+
+## 规模适配
+
+- **Minimal**：基础安全检查点（命令黑名单 `["rm", "drop", "delete"]`）。
+- **Professional**：简化版 SafetyGuardLoop（pre-action 权限检查 + post-action 敏感信息扫描）。
+- **Enterprise**：完整双层防线（4 条 pre-action 规则 + 4 条 post-action 规则 + 安全事件日志 + 告警通知）。
+
+## AI 构建提示
+
+```
+根据用户选择的规模实现安全护栏子循环：
+
+Professional 级别：
+  1. 实现 SafetyGuardLoop 类，包含 2 条 pre-action 规则和 2 条 post-action 规则
+  2. pre-action: permission_check + block_destructive
+  3. post-action: no_secrets + pii_detection
+  4. 集成到 AgentCore.run() 中：每个工具调用前后调用
+
+Enterprise 级别：
+  1. 实现完整 SafetyGuardLoop 类，包含全部 8 条规则
+  2. 实现安全事件日志（safety_log），记录每次检查的判定结果
+  3. 实现告警通知（_alert 方法，推送到 Slack / PagerDuty）
+  4. 实现自动脱敏（_redact 方法，正则替换敏感内容为 [REDACTED]）
+  5. 安全事件日志定期写入 WAL，支持审计回溯
+
+关键约束：
+  □ 安全护栏检查不得阻塞主循环超过 50ms（超时则放行 + 记录告警）
+  □ 敏感信息扫描使用正则匹配，不调用 LLM（避免 Token 开销）
+  □ BLOCK 判定必须记录完整的审计日志（action / rule / verdict / timestamp）
+  □ 安全规则支持热更新（从配置中心加载，不重启 Agent）
+```

@@ -293,12 +293,12 @@ AI可以辅助用户选择规模：
 
 ### Phase 4: Agent核心循环 → `references/04-phase-agent-loop.md`
 
-**目标**：实现健壮的Agent主循环，包含错误恢复和状态管理。
+**目标**：实现健壮的Agent主循环，融合2026年九大Loop Engineering技术。
 
 **规模差异**：
-- Minimal: 简单 while 循环
-- Professional: while(true) + 7个Continue站点 + 状态机
-- Enterprise: AsyncGenerator流式 + 双层超时 + Session回放
+- Minimal: 简单 while 循环 + 声明式配置概念 + 基础安全检查点
+- Professional: 轻量图配置 + 双层循环（简化版） + 安全护栏（简化版） + 声明式配置
+- Enterprise: 全9大技术 + 流式事件总线 + 耐久执行 + DSPy自优化 + 可观测断点 + 多Agent拓扑
 
 ### Phase 5: 上下文管理 → `references/05-phase-context.md`
 

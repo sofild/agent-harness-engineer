@@ -347,3 +347,145 @@ Enterprise 级别：
   □ 告警规则配置文件格式正确
   □ Langfuse 回调不阻塞主流程 (异步发送)
 ```
+
+---
+
+# 动态断点注入与热修改策略 (v4)
+
+> 配合 Phase 4 的 Loop Engineering 升级，引入运行时动态断点和热修改能力，使运维人员可以在不下线 Agent 的情况下注入审批、调整参数。
+
+## 设计原理
+
+生产环境中的 Agent Loop 不能是一个黑箱。通过全链路 tracing 实时监控循环状态，运维人员可以在运行时：
+- **动态断点注入**：看到某个 Agent 即将执行高风险操作，通过管理面板挂入人工审批
+- **热修改策略**：在不下线 Agent 的情况下调整循环参数（max_iterations、temperature 等）
+
+## 抽象接口
+
+```python
+from typing import Dict, List, Optional, Callable, Any
+from dataclasses import dataclass
+
+
+@dataclass
+class Breakpoint:
+    """动态断点定义"""
+    id: str
+    condition: Callable[[Dict], bool]  # 触发条件函数
+    action: str                        # 触发后动作
+    reason: str                        # 注入原因
+    created_by: str                    # 操作者
+    created_at: str                    # 创建时间
+
+
+class BreakpointManager:
+    """动态断点管理：运维人员可在运行时注入/移除断点"""
+
+    def __init__(self):
+        self._breakpoints: Dict[str, Breakpoint] = {}
+
+    def inject(self, bp: Breakpoint) -> None:
+        """注入断点：挂载到 Agent 循环的下一步"""
+        ...
+
+    def remove(self, bp_id: str) -> None:
+        """移除断点：恢复自动执行"""
+        ...
+
+    def list_active(self) -> List[Breakpoint]:
+        """列出当前激活的断点"""
+        ...
+
+
+class HotConfigSource:
+    """热修改配置源：从配置中心实时拉取参数，无需重启"""
+
+    def __init__(self, config_center_url: str):
+        self._url = config_center_url
+        self._watchers: Dict[str, Callable] = {}
+
+    async def get(self) -> Dict[str, Any]:
+        """获取当前最新配置"""
+        ...
+
+    def watch(self, key: str, callback: Callable) -> None:
+        """监听配置变更"""
+        ...
+
+
+class ObservableLoop:
+    """
+    可观测循环：每个节点都被追踪，运维人员可在管理面板看到实时状态并注入断点。
+    """
+
+    def __init__(self, config: Dict, breakpoint_manager: BreakpointManager, hot_config: HotConfigSource):
+        self.config = config
+        self.breakpoint_manager = breakpoint_manager
+        self.hot_config = hot_config
+
+    async def run(self, task: str) -> AsyncGenerator[AgentEvent, None]:
+        """主循环 —— 每轮检查断点和热修改"""
+        state = {"task": task, "iteration": 0}
+        while state["iteration"] < self.config["max_iterations"]:
+            # 1. 检查是否有运维注入的断点
+            breakpoint = await self._check_breakpoint(state)
+            if breakpoint:
+                approval = await self._request_human_approval(breakpoint)
+                if not approval["approved"]:
+                    state["status"] = "paused_by_human"
+                    return
+
+            # 2. 检查热修改
+            new_config = await self.hot_config.get()
+            if new_config != self.config:
+                self.config = new_config
+
+            # 3. 执行一步
+            yield await self._execute_step(state)
+            state["iteration"] += 1
+
+    async def _check_breakpoint(self, state: Dict) -> Optional[Breakpoint]:
+        """检查当前状态是否匹配任何激活的断点"""
+        ...
+
+    async def _request_human_approval(self, bp: Breakpoint) -> Dict:
+        """向管理面板发送人工审批请求，等待响应（带超时）"""
+        ...
+```
+
+## 管理面板能力清单
+
+| 能力 | 说明 | 实现方式 |
+|------|------|---------|
+| **实时火焰图** | 每个节点的耗时占比 | LangSmith Trace View / Weave |
+| **动态断点** | 在下一步挂起，等待人工确认 | WebSocket + Redis 断点配置 |
+| **热修改参数** | 修改 max_iterations / temperature | 配置中心（etcd / Consul）实时推送 |
+| **成本仪表盘** | 实时 Token 消耗 + 预算预警 | Weave / LangSmith dashboards |
+| **回放与调试** | 对历史轨迹逐步回放 | Temporal Replay / LangSmith Playground |
+| **策略 A/B** | 同时运行多个策略版本对比 | 基于 trace tag 分流 |
+
+## 规模适配
+
+- **Minimal**：不使用可观测断点。
+- **Professional**：基础结构化日志 + 指标计数器。
+- **Enterprise**：完整可观测循环（动态断点 + 热修改 + 管理面板 + 策略 A/B）。
+
+## AI 构建提示
+
+```
+根据用户选择的规模实现可观测断点：
+
+Enterprise 级别：
+  1. 实现 BreakpointManager 类，支持注入/移除/列出激活断点
+  2. 实现 ObservableLoop 类，在每轮循环中检查断点和热修改
+  3. 实现 HotConfigSource 类，从 etcd/Consul/Redis 拉取配置
+  4. 实现 WebSocket 通道，用于管理面板与 Agent 的实时通信
+  5. 实现 _request_human_approval 方法，支持超时（默认 300s）
+
+关键约束：
+  □ 断点检查不得阻塞主循环超过 10ms（异步检查 Redis/配置中心）
+  □ 人工审批超时后必须自动放行（避免死锁，但记录审计日志）
+  □ 热修改变更必须记录在 WAL 中（type: CONFIG_CHANGE）
+  □ 断点配置持久化到 Redis，防止管理面板重启后丢失
+  □ 策略 A/B 分流基于 trace tag，不影响主循环逻辑
+```

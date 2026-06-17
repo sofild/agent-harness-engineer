@@ -69,7 +69,7 @@ git clone https://github.com/nicepkg/agent-harness-engineer.git
 第一阶段  ●──○ 项目初始化    ▸ 脚手架搭建、配置文件、目录结构
 第二阶段  ●──○ LLM 抽象层   ▸ 多供应商客户端（Anthropic、OpenAI、Azure、本地模型）
 第三阶段  ●──○ 工具系统     ▸ 工具注册表、Schema 校验、并发安全
-第四阶段  ●──○ Agent 核心循环 ▸ 7 个 Continue 站点、不可变状态、错误恢复
+第四阶段  ●──○ Agent 核心循环 ▸ Loop Engineering 九大技术、双层循环、流式事件总线
 第五阶段  ●──○ 上下文管理   ▸ 四级压缩管道、记忆系统、自动做梦机制
 第六阶段  ●──○ 权限安全     ▸ 六层纵深防御、沙箱隔离、审计日志
 第七阶段  ●──○ 生产化      ▸ 测试、监控、日志、部署文档
@@ -228,6 +228,7 @@ templates/project-scaffold/
 - [x] MCP 协议集成
 - [x] 六层纵深防御安全
 - [x] 四级上下文压缩管道
+- [x] v4 Loop Engineering 升级（2026 九大技术）
 - [ ] Go 语言脚手架
 - [ ] 评测基准套件
 - [ ] 可视化架构图

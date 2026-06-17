@@ -656,3 +656,112 @@ Enterprise配置确保跨session记忆连续，压缩管道维持成本可控。
 ## 下一步
 
 完成Phase 5后，进入 **Phase 6: 权限安全**（参考 `references/06-phase-permissions.md`）
+
+---
+
+# 双层循环上下文隔离 (v4)
+
+> 配合 Phase 4 的 Loop Engineering 升级，引入 Outer Loop（规划层）与 Inner Loop（执行层）的上下文分离策略，避免中间工具输出污染战略决策。
+
+## 设计原理
+
+双层循环架构的核心挑战不是"如何执行"，而是**如何防止 Inner Loop 的噪音污染 Outer Loop 的决策质量**。
+
+这本质上是 ReWOO（Reasoning WithOut Observation）的核心洞察：观测数据（工具输出）不应混入推理过程——它会把推理链污染成"我看到 X，所以做 X"，而非"基于目标，我需要 X"。
+
+## 上下文分离策略
+
+```
+┌─────────────────────────────────────────────────────┐
+│               Outer Loop (Planner)                   │
+│  上下文: 任务描述 + 已完成步骤摘要 + 当前步骤        │
+│  ❌ 不包含: 原始工具输出、中间文件内容                │
+│  ✅ 包含: 执行结果结构化摘要（成功/失败/关键发现）    │
+├─────────────────────────────────────────────────────┤
+│               Inner Loop (Executor)                  │
+│  上下文: 当前步骤描述 + 前一步结果摘要 + 工具输出     │
+│  ✅ 包含: 原始工具输出（仅为当前步骤执行用）         │
+│  ❌ 不包含: 全局任务、其他步骤的细节                  │
+└─────────────────────────────────────────────────────┘
+```
+
+## 正确做法 vs 错误做法
+
+### ❌ 错误：Inner Loop 输出全部回传给 Outer Loop
+
+```python
+# 错误：将 Inner Loop 的原始工具输出直接传给 Outer Loop
+async def outer_loop(self, task: str):
+    for step in self.plan.steps:
+        result = await self.inner_loop(step)
+        # ❌ 把 Inner Loop 的全部消息历史直接追加到 Outer Loop 上下文
+        self.context.extend(result["messages"])  # 污染！
+        self.context.append({
+            "role": "user",
+            "content": result["output"],  # 包含大量原始工具输出
+        })
+```
+
+### ✅ 正确：Inner Loop 只返回结构化摘要
+
+```python
+# 正确：Inner Loop 返回结构化摘要，Outer Loop 只接收关键信息
+@dataclass
+class StepSummary:
+    """Inner Loop 执行结果的结构化摘要"""
+    step_id: str
+    success: bool
+    key_findings: str        # 关键发现（1-2 句话，不含原始输出）
+    files_modified: List[str] # 修改的文件列表
+    errors: List[str]         # 错误信息（如有）
+    next_hint: str            # 给下一步的提示（如有）
+
+async def outer_loop(self, task: str):
+    for step in self.plan.steps:
+        summary = await self.inner_loop(step)
+        # ✅ 只将结构化摘要注入 Outer Loop 上下文
+        self.context.append({
+            "step": step.id,
+            "summary": summary.key_findings,
+            "status": "success" if summary.success else "failed",
+        })
+        if not summary.success:
+            await self._replan(step, summary.errors)
+```
+
+## 上下文污染陷阱
+
+将 Inner Loop 的原始工具输出直接传给 Outer Loop 会导致以下问题：
+
+1. **决策质量下降**：Outer Loop 的 Planner 看到大量工具输出后，会倾向于"基于看到的内容做决策"，而非"基于目标做决策"
+2. **Token 浪费**：原始工具输出（如文件内容、命令输出）可能包含大量冗余信息，占用 Outer Loop 有限的上下文窗口
+3. **计划偏离**：Planner 被工具输出中的细节吸引，失去全局视野，频繁修改计划导致任务漂移
+
+## 规模适配
+
+- **Minimal**：不使用双层循环，无需上下文隔离。
+- **Professional**：固定计划执行，Inner Loop 返回简单的成功/失败 + 错误信息。
+- **Enterprise**：完整上下文隔离，Inner Loop 返回 StepSummary 结构化摘要，Outer Loop 仅接收摘要。
+
+## AI 构建提示
+
+```
+根据用户选择的规模实现双层循环上下文隔离：
+
+Professional 级别：
+  1. Inner Loop 执行完成后返回 {success: bool, error: str, output: str}
+  2. Outer Loop 只记录 success 和 error，不记录完整 output
+  3. 如果步骤失败，Outer Loop 将 error 注入为"重新规划"的上下文
+
+Enterprise 级别：
+  1. 实现 StepSummary dataclass，包含 key_findings / files_modified / errors / next_hint
+  2. Inner Loop 末尾调用 LLM 生成结构化摘要（不追加到 Inner Loop 上下文）
+  3. Outer Loop 只接收 StepSummary 对象，不访问 Inner Loop 的消息历史
+  4. 动态重规划时，Planner 只看到 StepSummary 列表，不看到原始工具输出
+
+关键约束：
+  □ Inner Loop 的原始消息历史绝不传递给 Outer Loop
+  □ 摘要生成使用低成本模型（如 gpt-4o-mini），不增加 Planner 的 Token 消耗
+  □ 摘要必须在 Inner Loop 的独立上下文中生成，不污染 Planner 的上下文
+  □ 如果 Inner Loop 超过 5 次尝试仍然失败，摘要中必须明确标记"需要人工介入"
+```

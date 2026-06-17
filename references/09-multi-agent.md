@@ -314,3 +314,120 @@ Swarm 模式在以下条件同时满足时才优于 Coordinator：
 7. **Worktree 实现**：通过 `git worktree` CLI 创建隔离工作区。子 Agent 的 `workdir` 指向其 worktree 路径。完成后由 Coordinator 执行 `git worktree remove` 清理。若子 Agent 在 worktree 中产生了有价值的变更，Coordinator 先 `git merge` 或创建 branch 再清理。
 
 8. **Swarm 模式的共识算法**使用"轻量 Raft"——不实现完整的日志复制，只实现 Leader 选举和提议投票。Agent 数量通常 < 50，不需要完整的分布式共识协议。
+
+---
+
+# 多 Agent 拓扑循环 (v4)
+
+> 配合 Phase 4 的 Loop Engineering 升级，引入三种标准的多 Agent 协作拓扑，形成可组合的"协作循环"。
+
+## 设计原理
+
+单个 Agent 的循环效能有天花板——推理深度、上下文窗口、单一视角都有不可逾越的局限。多 Agent 拓扑循环将多个 Agent 嵌套在一个更大的循环中，形成结构化协作。
+
+## 三种标准拓扑
+
+### 拓扑 1：Manager-Worker（管理者-工人）
+
+主 Agent（Manager）分配子任务，启动子 Agent Loop 并等待结果，自身保持监督循环，随时中断或重新分配。
+
+```python
+class ManagerWorkerLoop:
+    """
+    Manager 自身运行一个监督循环：
+    1. 分析任务，拆解为子任务
+    2. 分配给 Worker（创建子循环）
+    3. 收集结果，评估质量
+    4. 不满意则重新分配（最多 3 次）
+    """
+
+    def __init__(self):
+        self.workers: Dict[str, WorkerAgent] = {}
+        self.task_queue: asyncio.Queue = asyncio.Queue()
+
+    async def manage(self, main_task: str) -> AsyncGenerator[AgentEvent, None]:
+        """Manager 的主循环"""
+        # Step 1: 拆解任务
+        # Step 2: 分配循环（支持重分配）
+        # Step 3: 质量评估
+        # Step 4: 不满意则重新分配
+        ...
+```
+
+### 拓扑 2：Generator-Critic（生成-批评-修正）
+
+输出 Agent 生成 → 批评 Agent 指出问题 → 生成 Agent 再次修改。形成一个内环迭代，直到质量过关。
+
+```python
+class GeneratorCriticLoop:
+    """
+    内环结构：
+    Generator → Critic → [PASS score>=0.9] → 输出
+                       → [FAIL] → Generator（带批评意见）→ ...
+    """
+
+    async def generate(self, task: str, max_rounds: int = 5) -> AsyncGenerator[AgentEvent, None]:
+        """生成-批评-修正主循环"""
+        output = await self._generator(task)
+        for round_num in range(max_rounds):
+            critique = await self._critic(output, task)
+            if critique["score"] >= 0.9:
+                yield FinalResponseEvent(text=output)
+                return
+            output = await self._generator(task, previous_output=output, feedback=critique["feedback"])
+        yield FinalResponseEvent(text=output)
+```
+
+### 拓扑 3：Debate（多 Agent 辩论）
+
+多个 Agent 并行独立回答，然后互相辩论多轮，最后裁判 Agent 汇总。
+
+```python
+class DebateLoop:
+    """
+    辩论流程：
+    1. 多个 Expert Agent 并行独立回答
+    2. 互相审阅对方的回答，提出反驳
+    3. 多轮辩论后，Judge Agent 汇总裁决
+    """
+
+    async def debate(self, question: str, num_experts: int = 3, rounds: int = 3) -> AsyncGenerator[AgentEvent, None]:
+        """辩论主循环"""
+        # Round 1: 独立回答
+        # Round 2-N: 互相辩论
+        # 最终裁决
+        ...
+```
+
+## 拓扑选择指南
+
+| 拓扑 | Token 成本 | 质量提升 | 适用场景 |
+|------|-----------|---------|----------|
+| Manager-Worker | 中（子任务并行） | 中 | 大型多文件任务，有明确分工 |
+| Generator-Critic | 低（2x 调用） | 高 | 代码生成、文档写作 |
+| 多 Agent 辩论 | 高（N×M 轮） | 最高 | 安全审计、设计评审、关键决策 |
+
+## 规模适配
+
+- **Minimal**：不支持多 Agent 拓扑。
+- **Professional**：可选。通过 Coordinator 模式实现基础的 Manager-Worker。
+- **Enterprise**：完整支持三种拓扑。包含 Agent 池管理、拓扑选择器、动态 Worker 扩缩。
+
+## AI 构建提示
+
+```
+根据用户选择的规模实现多 Agent 拓扑：
+
+Enterprise 级别：
+  1. 实现 ManagerWorkerLoop 类，支持子任务拆解和动态重分配
+  2. 实现 GeneratorCriticLoop 类，Generator 使用高温度（0.7-0.9），Critic 使用低温度（0.0-0.1）
+  3. 实现 DebateLoop 类，支持可配置的 Expert 数量和辩论轮次
+  4. 实现拓扑选择器：根据任务类型自动选择合适拓扑
+  5. 每个子 Agent 拥有独立上下文窗口（从空白消息列表开始）
+
+关键约束：
+  □ 子 Agent 不接受完整消息历史，只接受结构化子任务描述
+  □ 子 Agent 返回结构化摘要（{findings, files_modified, errors, suggestions}）
+  □ 一个子 Agent 失败不应阻塞其他子 Agent
+  □ 子 Agent 间通过 Coordinator 通信，不直接交互
+```

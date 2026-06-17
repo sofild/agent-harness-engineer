@@ -69,7 +69,7 @@ When triggered, the Skill will:
 Phase 1  ●──○ Project Init       ▸ Scaffolding, config, directory structure
 Phase 2  ●──○ LLM Abstraction    ▸ Provider-agnostic client (Anthropic, OpenAI, Azure, Local)
 Phase 3  ●──○ Tool System        ▸ Registry, schema validation, concurrency safety
-Phase 4  ●──○ Agent Core Loop    ▸ 7 continue-sites, immutable state, error recovery
+Phase 4  ●──○ Agent Core Loop    ▸ Loop Engineering 9 techniques, dual-loop, streaming event bus
 Phase 5  ●──○ Context Management ▸ 4-level compression, memory system, auto-dreaming
 Phase 6  ●──○ Permissions        ▸ 6-layer defense-in-depth, sandbox, audit logging
 Phase 7  ●──○ Production         ▸ Testing, monitoring, logging, deployment docs
@@ -228,6 +228,7 @@ This Skill auto-triggers on keywords like:
 - [x] MCP protocol integration
 - [x] 6-layer defense-in-depth security
 - [x] 4-level context compression pipeline
+- [x] v4 Loop Engineering upgrade (2026 9 techniques)
 - [ ] Go language scaffold
 - [ ] Evaluation benchmark suite
 - [ ] Visual architecture diagrams

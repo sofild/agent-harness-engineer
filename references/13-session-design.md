@@ -297,3 +297,103 @@ Enterprise 级别：
   □ turn_start 和 turn_end 必须成对出现
   □ 提供当前状态查询 (is_idle, is_running, etc.)
 ```
+
+---
+
+# 耐久执行与检查点恢复 (v4)
+
+> 配合 Phase 4 的 Loop Engineering 升级，引入耐久执行（Durable Execution）模式，使 Agent 循环具备"系统重启后继续"的能力。
+
+## 设计原理
+
+耐久执行的核心思想：每一步的状态写入持久化存储，工作流引擎能重新唤起并从中断的节点继续循环，而不是重新运行整个任务。
+
+与现有 WAL 日志的关系：
+- **WAL** 负责记录"发生了什么"（事件日志，用于审计和回放）
+- **检查点（Checkpoint）** 负责记录"当前状态是什么"（完整快照，用于恢复）
+- 两者互补：WAL 保证不丢事件，Checkpoint 保证快速恢复
+
+## 检查点保存时机
+
+| 触发条件 | 频率 | 说明 |
+|---------|------|------|
+| 每 N 轮循环 | 默认每 5 轮 | 常规检查点，防止状态丢失过多 |
+| 计划变更 | 每次双层循环重规划时 | 外循环调整计划后立即存档 |
+| 安全阻断 | SafetyGuardLoop 发出 BLOCK 时 | 阻断前保存现场，便于审计 |
+| 人工断点前 | 可观测断点触发等待时 | 挂起前保存，恢复时从断点继续 |
+| 会话结束 | 正常退出时 | 最终状态存档 |
+
+## 检查点数据结构
+
+```python
+@dataclass
+class CheckpointData:
+    """持久化的检查点状态"""
+    checkpoint_id: str
+    session_id: str
+    seq_id: int                        # 对应 WAL 中的序列号
+    turn_count: int
+    agent_state: str                   # IDLE / RUNNING / PAUSED / EXPIRED / ERROR
+    messages_summary: str              # 压缩后的消息摘要（非完整消息列表）
+    execution_plan: Optional[dict]     # 双层循环的执行计划状态
+    pending_tasks: List[str]           # 未完成的任务列表
+    active_files: List[str]            # 当前工作文件列表
+    total_cost: float                  # 累计 Token 费用
+    created_at: str                    # ISO 8601 时间戳
+```
+
+## 崩溃恢复流程
+
+```
+1. 加载最近检查点 → 获取 checkpoint_id 和 seq_id
+2. 重放 WAL 中 seq_id 之后的事件 → 重建精确状态
+3. 检查 execution_plan 中未完成的步骤 → 从中断步继续
+4. 恢复 active_files 上下文 → 重新注入 system prompt
+5. 继续 Agent 主循环
+```
+
+**关键约束**：
+- 恢复代码必须是**确定性的**——给定相同的检查点和 WAL，必须产生相同的恢复结果
+- 工具调用在恢复时需要**幂等性保证**——如果工具调用已完成但 WAL 未记录，恢复时可能重复执行，工具必须能处理
+- 不可在恢复时调用 `random`、`datetime.now()` 等非确定性函数
+
+## 与 Temporal.io 模式的关系
+
+Temporal.io 是工业界耐久执行的事实标准。本项目采用**轻量级实现**，不引入 Temporal 依赖，但遵循其核心设计原则：
+
+| Temporal 概念 | 本项目对应 |
+|--------------|----------|
+| Workflow | Agent 主循环（`AgentCore.run()`） |
+| Activity | 工具调用（每次 `execute_tool()`） |
+| Event History | Session WAL (`wal_{session_id}.jsonl`) |
+| Workflow State | CheckpointData |
+| Replay | `replay_session()` 从 WAL 重建 |
+
+**规模适配**：
+- **Minimal**：不使用耐久执行。崩溃后对话丢失。
+- **Professional**：基础检查点（每 5 轮文件存档，JSON 格式）。
+- **Enterprise**：完整检查点 + WAL 双重持久化，支持崩溃恢复和跨进程迁移。
+
+## AI 构建提示
+
+```
+根据用户选择的规模实现耐久执行：
+
+Professional 级别：
+  1. 在 AgentCore 中每 5 轮调用 _save_checkpoint()
+  2. 检查点保存为 JSON 文件：.checkpoints/{session_id}.json
+  3. 恢复时加载检查点，从 turn_count 继续
+
+Enterprise 级别：
+  1. 实现 CheckpointManager 类，管理检查点生命周期
+  2. 检查点保存到 Redis/数据库（非文件系统）
+  3. 实现 LoopRecovery 类，编排恢复流程
+  4. 支持跨进程迁移（从检查点 + WAL 在新进程中恢复）
+  5. 检查点压缩：保留最近 3 个检查点，旧检查点归档
+
+关键约束：
+  □ 恢复代码不使用 random / datetime.now() 等非确定性函数
+  □ 工具调用在恢复时检查幂等性（通过 tool_call_id 去重）
+  □ 检查点保存必须是原子操作（先写临时文件，再 rename）
+  □ 检查点包含 seq_id，与 WAL 对齐
+```
